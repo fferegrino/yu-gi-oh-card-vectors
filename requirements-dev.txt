@@ -1,3 +1,4 @@
+black
 jupyter
 jupyterlab
 jupytext
