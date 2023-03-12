@@ -1,42 +1,6 @@
 from metaflow import FlowSpec, step, Parameter, profile
 
 
-MAIN_DECK_ROW = 6
-EXTRA_DECK_ROW = 7
-SIDE_DECK_ROW = 8
-
-
-def fill_matrix_from_file(csv_file, card_to_id, coo, cards_not_in_index):
-    import csv
-
-    with open(csv_file) as r:
-        reader = csv.reader(r)
-        next(reader)
-        for row in reader:
-            cards_in_deck = []
-            for col in [MAIN_DECK_ROW, EXTRA_DECK_ROW, SIDE_DECK_ROW]:
-                cards_ = [int(card_str.strip('"')) for card_str in row[col][1:-1].split(",") if card_str.strip('"')]
-                cards_in_deck.extend(cards_)
-
-            for card in cards_in_deck:
-                try:
-                    origin_card = card_to_id[card]
-                except KeyError:
-                    if card not in cards_not_in_index:
-                        cards_not_in_index.add(card)
-                    continue
-
-                for other_card in cards_in_deck:
-                    try:
-                        destination_card = card_to_id[other_card]
-                    except KeyError:
-                        if other_card not in cards_not_in_index:
-                            cards_not_in_index.add(other_card)
-                        continue
-
-                    coo[origin_card, destination_card] += 1
-
-
 class GenerateCoOccurrenceVectorsFlow(FlowSpec):
     """ """
 
@@ -58,25 +22,22 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         """
         Builds the reference dictionaries for the cards, these will map the card ID to the index in the embedding matrix
         """
-
-        import subprocess
-        import tempfile
+        from git import clone_repo
         import csv
 
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            subprocess.run(["git", "clone", "--single-branch", "--depth", "1", self.cards_repo, tmpdirname])
-
+        with clone_repo(self.cards_repo) as (repo_path, commit_hash):
+            self.cards_commit_hash = commit_hash
             self.card_to_id = {}
             self.id_to_card = {}
 
-            with open(tmpdirname + "/data/cards.csv") as r:
+            with open(repo_path + "/data/cards.csv") as r:
                 reader = csv.reader(r)
                 next(reader)
                 for idx, row in enumerate(reader):
                     self.card_to_id[int(row[0])] = idx
                     self.id_to_card[idx] = int(row[0])
 
-            with open(tmpdirname + "/data/cards_variants.csv") as r:
+            with open(repo_path + "/data/cards_variants.csv") as r:
                 reader = csv.reader(r)
                 next(reader)
                 for idx, row in enumerate(reader):
@@ -95,20 +56,19 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         """
         Build a sparse co-occurrence matrix for the cards in the decks
         """
-        import subprocess
-        import tempfile
+        from git import clone_repo
         from scipy.sparse import coo_matrix
         import numpy as np
         import glob
+        from cooccurrence import fill_matrix_from_file
 
         coo = np.zeros((self.card_count, self.card_count), dtype=np.int32)
 
         self.cards_not_in_index = set()
 
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            subprocess.run(["git", "clone", "--single-branch", "--depth", "1", self.decks_repo, tmpdirname])
-
-            for csv_file in glob.glob(tmpdirname + "/data/*.csv"):
+        with clone_repo(self.decks_repo) as (repo_path, commit_hash):
+            self.decks_commit_hash = commit_hash
+            for csv_file in glob.glob(repo_path + "/data/*.csv"):
                 fill_matrix_from_file(csv_file, self.card_to_id, coo, self.cards_not_in_index)
 
         self.matrix = coo_matrix(coo)
@@ -139,7 +99,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         from annoy import AnnoyIndex
         from tempfile import NamedTemporaryFile
 
-        with NamedTemporaryFile(delete=not self.preserve_annoy_index) as tmp:
+        with NamedTemporaryFile(delete=False) as tmp:
             ann = AnnoyIndex(self.embedding_size, "angular")
             ann.on_disk_build(tmp.name)
             with profile("Add vectors"):
@@ -148,10 +108,10 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
             with profile("Build index"):
                 ann.build(self.annoy_trees)
 
-            self.model_ann = tmp.read()
+            print(f"Writing index to {tmp.name} and not deleting")
 
             if self.preserve_annoy_index:
-                print(f"Writing index to {tmp.name} and not deleting")
+                self.model_ann = tmp.read()
 
         self.next(self.end)
 
