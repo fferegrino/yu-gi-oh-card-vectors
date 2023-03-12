@@ -6,7 +6,7 @@ EXTRA_DECK_ROW = 7
 SIDE_DECK_ROW = 8
 
 
-def fill_matrix_from_file(csv_file, card_to_id, coo):
+def fill_matrix_from_file(csv_file, card_to_id, coo, cards_not_in_index):
     import csv
 
     with open(csv_file) as r:
@@ -22,20 +22,23 @@ def fill_matrix_from_file(csv_file, card_to_id, coo):
                 try:
                     origin_card = card_to_id[card]
                 except KeyError:
-                    print(f"Origin {card} not found in card_to_id")
+                    if card not in cards_not_in_index:
+                        cards_not_in_index.add(card)
                     continue
 
                 for other_card in cards_in_deck:
                     try:
                         destination_card = card_to_id[other_card]
                     except KeyError:
-                        print(f"Destination {other_card} not found in card_to_id")
+                        if other_card not in cards_not_in_index:
+                            cards_not_in_index.add(other_card)
                         continue
 
                     coo[origin_card, destination_card] += 1
 
 
 class GenerateCoOccurrenceVectorsFlow(FlowSpec):
+    """ """
 
     embedding_size = Parameter("embedding_size", default=20, help="Size of the embedding vectors")
     annoy_trees = Parameter("annoy_trees", default=5, help="Number of trees to use in the Annoy index")
@@ -43,12 +46,19 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
     @step
     def start(self):
+        """
+        Setups the flow with the appropriate repository URLs
+        """
         self.cards_repo = "https://github.com/fferegrino/yu-gi-oh.git"
         self.decks_repo = "https://github.com/fferegrino/yu-gi-oh-decks.git"
         self.next(self.build_reference_dicts)
 
     @step
     def build_reference_dicts(self):
+        """
+        Builds the reference dictionaries for the cards, these will map the card ID to the index in the embedding matrix
+        """
+
         import subprocess
         import tempfile
         import csv
@@ -78,10 +88,13 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
                         except:
                             print(f"Error with id {original}")
         self.card_count = len(self.id_to_card)
-        self.next(self.build_cooccurence_matrix)
+        self.next(self.build_cooccurrence_matrix)
 
     @step
-    def build_cooccurence_matrix(self):
+    def build_cooccurrence_matrix(self):
+        """
+        Build a sparse co-occurrence matrix for the cards in the decks
+        """
         import subprocess
         import tempfile
         from scipy.sparse import coo_matrix
@@ -90,11 +103,13 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         coo = np.zeros((self.card_count, self.card_count), dtype=np.int32)
 
+        self.cards_not_in_index = set()
+
         with tempfile.TemporaryDirectory() as tmpdirname:
             subprocess.run(["git", "clone", "--single-branch", "--depth", "1", self.decks_repo, tmpdirname])
 
             for csv_file in glob.glob(tmpdirname + "/data/*.csv"):
-                fill_matrix_from_file(csv_file, self.card_to_id, coo)
+                fill_matrix_from_file(csv_file, self.card_to_id, coo, self.cards_not_in_index)
 
         self.matrix = coo_matrix(coo)
 
@@ -102,10 +117,13 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
     @step
     def build_embeddings(self):
+        """
+        Build the embeddings using the co-occurrence matrix with the SVD algorithm
+        """
         from scipy.sparse.linalg import svds
         import numpy as np
 
-        u, s, v_t = svds(self.matrix.astype(float), k=self.embedding_size)
+        u, s, _ = svds(self.matrix.astype(float), k=self.embedding_size)
         embeddings = u * np.sqrt(s)
 
         # Normalize embeddings
@@ -115,6 +133,9 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
     @step
     def build_index(self):
+        """
+        Build the Annoy index for the embeddings
+        """
         from annoy import AnnoyIndex
         from tempfile import NamedTemporaryFile
 
