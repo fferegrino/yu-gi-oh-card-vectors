@@ -22,11 +22,10 @@ def fill_matrix_from_file(csv_file, card_to_id, coo):
 
             for card in cards_in_deck:
                 for other_card in cards_in_deck:
-                    if card == other_card:
-                        try:
-                            coo[card_to_id[card], card_to_id[other_card]] += 1
-                        except:
-                            print(f"{card} {other_card}")
+                    try:
+                        coo[card_to_id[card], card_to_id[other_card]] += 1
+                    except:
+                        print(f"{card} {other_card}")
 
 
 
