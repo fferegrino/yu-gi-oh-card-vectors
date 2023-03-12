@@ -1,3 +1,4 @@
+annoy
 metaflow
 numpy
 scipy
