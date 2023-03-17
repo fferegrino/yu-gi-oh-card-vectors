@@ -55,5 +55,8 @@ jobs:
           pip install --upgrade metaflow==2.8.0
 
       - name: Trigger Metaflow execution
+        env:
+          USER: antonio
+          CONDA_CHANNELS: conda-forge
         run: |
-          USER=antonio python generate_co_occurrence_vectors_flow.py --environment=conda  resume --with batch
+          python generate_co_occurrence_vectors_flow.py --environment=conda run --with batch
