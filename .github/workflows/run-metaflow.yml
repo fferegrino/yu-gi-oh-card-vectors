@@ -59,4 +59,4 @@ jobs:
           USER: antonio
           CONDA_CHANNELS: conda-forge
         run: |
-          python generate_co_occurrence_vectors_flow.py --environment=conda run --with batch
+          python generate_co_occurrence_vectors_flow.py --environment=conda run --with batch --upload_to_s3 true

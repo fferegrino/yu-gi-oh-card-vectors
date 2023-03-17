@@ -6,6 +6,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
     embedding_size = Parameter("embedding_size", default=30, help="Size of the embedding vectors")
     annoy_trees = Parameter("annoy_trees", default=10, help="Number of trees to use in the Annoy index")
+    upload_to_s3 = Parameter("upload_to_s3", default=False, help="Upload the index to S3")
 
     @step
     def start(self):
@@ -34,7 +35,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
                 next(reader)
                 for idx, row in enumerate(reader):
                     self.card_to_id[int(row[0])] = idx
-                    self.id_to_card[idx] ={"passcode": int(row[0]), "name": row[1]}
+                    self.id_to_card[idx] = {"passcode": int(row[0]), "name": row[1]}
 
             with open(repo_path + "/data/cards_variants.csv") as r:
                 reader = csv.reader(r)
@@ -64,12 +65,10 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         coo = np.zeros((self.card_count, self.card_count), dtype=np.int32)
 
-        self.cards_not_in_index = set()
-
         with clone_repo(self.decks_repo) as (repo_path, commit_hash):
             self.decks_commit_hash = commit_hash
             for csv_file in glob.glob(repo_path + "/data/*.csv"):
-                fill_matrix_from_file(csv_file, self.card_to_id, coo, self.cards_not_in_index)
+                fill_matrix_from_file(csv_file, self.card_to_id, coo)
 
         self.matrix = coo_matrix(coo)
 
@@ -112,7 +111,6 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
             self.model_ann = tmp.read()
 
-
         self.next(self.end)
 
     @step
@@ -121,21 +119,22 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         import json
         import boto3
 
-        with NamedTemporaryFile(delete=False) as index_file:
-            index_file.write(self.model_ann)
+        if self.upload_to_s3:
+            with NamedTemporaryFile(delete=False) as index_file:
+                index_file.write(self.model_ann)
 
-        with NamedTemporaryFile(delete=False,mode="w") as id_to_card:
-            json.dump(self.id_to_card, id_to_card)
+            with NamedTemporaryFile(delete=False, mode="w") as id_to_card:
+                json.dump(self.id_to_card, id_to_card)
 
-        with S3(run=self) as s3:
-            upload_results = s3.put_files([
-                ("index.ann", index_file.name),
-                ("cards.json", id_to_card.name)
-            ])
+            with S3(run=self) as s3:
+                upload_results = s3.put_files([("index.ann", index_file.name), ("cards.json", id_to_card.name)])
 
-        s3 = boto3.resource("s3")
-        for (file, s3url), name in zip(upload_results, ["index.ann", "cards.json"]):
-            copy_file_s3(s3, name, s3url)
+            s3 = boto3.resource("s3")
+            for (file, s3url), name in zip(upload_results, ["index.ann", "cards.json"]):
+                copy_file_s3(s3, name, s3url)
+        else:
+            print("Not uploading to S3")
+
 
 def copy_file_s3(s3, name, s3url):
     bucket, key = s3url.replace("s3://", "").split("/", 1)
