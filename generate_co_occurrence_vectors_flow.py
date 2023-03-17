@@ -4,9 +4,8 @@ from metaflow import FlowSpec, step, Parameter, profile, conda, resources, S3
 class GenerateCoOccurrenceVectorsFlow(FlowSpec):
     """ """
 
-    embedding_size = Parameter("embedding_size", default=20, help="Size of the embedding vectors")
-    annoy_trees = Parameter("annoy_trees", default=5, help="Number of trees to use in the Annoy index")
-    preserve_annoy_index = Parameter("preserve_annoy_index", default=False, help="Preserve the Annoy index")
+    embedding_size = Parameter("embedding_size", default=30, help="Size of the embedding vectors")
+    annoy_trees = Parameter("annoy_trees", default=10, help="Number of trees to use in the Annoy index")
 
     @step
     def start(self):
@@ -35,7 +34,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
                 next(reader)
                 for idx, row in enumerate(reader):
                     self.card_to_id[int(row[0])] = idx
-                    self.id_to_card[idx] = int(row[0])
+                    self.id_to_card[idx] ={"passcode": int(row[0]), "name": row[1]}
 
             with open(repo_path + "/data/cards_variants.csv") as r:
                 reader = csv.reader(r)
@@ -94,7 +93,6 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         self.next(self.build_index)
 
     @conda(libraries={"python-annoy": "1.17.1", "numpy": "1.24.2"})
-    @resources(memory=16000)
     @step
     def build_index(self):
         """
@@ -103,33 +101,47 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         from annoy import AnnoyIndex
         from tempfile import NamedTemporaryFile
 
-        with NamedTemporaryFile(delete=False) as tmp:
+        with NamedTemporaryFile() as tmp:
             ann = AnnoyIndex(self.embedding_size, "angular")
             ann.on_disk_build(tmp.name)
             with profile("Add vectors"):
                 for idx, card_vector in enumerate(self.embeddings):
-                    ann.add_item(self.id_to_card[idx], card_vector)
+                    ann.add_item(idx, card_vector)
             with profile("Build index"):
                 ann.build(self.annoy_trees)
 
-            print(f"Writing index to {tmp.name} and not deleting")
+            self.model_ann = tmp.read()
 
-            with S3(run=self) as s3:
-                upload_result = s3.put_files([("index.ann", tmp.name)])
-                self.index_s3_url = upload_result[0][1]
-                print("Object saved at", self.index_s3_url)
 
         self.next(self.end)
 
     @step
     def end(self):
+        from tempfile import NamedTemporaryFile
+        import json
         import boto3
 
+        with NamedTemporaryFile(delete=False) as index_file:
+            index_file.write(self.model_ann)
+
+        with NamedTemporaryFile(delete=False,mode="w") as id_to_card:
+            json.dump(self.id_to_card, id_to_card)
+
+        with S3(run=self) as s3:
+            upload_results = s3.put_files([
+                ("index.ann", index_file.name),
+                ("cards.json", id_to_card.name)
+            ])
+
         s3 = boto3.resource("s3")
-        bucket, key = self.index_s3_url.replace("s3://", "").split("/", 1)
-        copy_source = {"Bucket": bucket, "Key": key}
-        bucket = s3.Bucket("feregrino-metaflow-experiments")
-        bucket.copy(copy_source, "yu-gi-oh/index.ann")
+        for (file, s3url), name in zip(upload_results, ["index.ann", "cards.json"]):
+            copy_file_s3(s3, name, s3url)
+
+def copy_file_s3(s3, name, s3url):
+    bucket, key = s3url.replace("s3://", "").split("/", 1)
+    copy_source = {"Bucket": bucket, "Key": key}
+    bucket = s3.Bucket("feregrino-metaflow-experiments")
+    bucket.copy(copy_source, f"yu-gi-oh/{name}")
 
 
 if __name__ == "__main__":
