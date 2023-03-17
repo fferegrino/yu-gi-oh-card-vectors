@@ -54,13 +54,6 @@ resource "aws_s3_bucket" "metaflow_experiments_bucket" {
   bucket = "feregrino-metaflow-experiments"
 }
 
-resource "aws_s3_bucket_public_access_block" "example" {
-  bucket = aws_s3_bucket.metaflow_experiments_bucket.id
-
-  block_public_acls   = true
-  block_public_policy = true
-}
-
 resource "aws_s3_bucket_policy" "example_bucket_policy" {
   bucket = aws_s3_bucket.metaflow_experiments_bucket.id
   policy = jsonencode({
@@ -97,7 +90,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "expire_metaflow_objects_after_
     }
   }
 }
-
 
 
 # The module will generate a Metaflow config in JSON format, write it to a file
