@@ -1,13 +1,13 @@
+from itertools import permutations
+from collections import Counter
+import csv
+
 MAIN_DECK_ROW = 6
 EXTRA_DECK_ROW = 7
 SIDE_DECK_ROW = 8
 
 
 def fill_matrix_from_file(csv_file, card_to_id, coo):
-    import csv
-    from itertools import combinations
-    from collections import Counter
-
     with open(csv_file) as r:
         reader = csv.reader(r)
         next(reader)
@@ -20,6 +20,10 @@ def fill_matrix_from_file(csv_file, card_to_id, coo):
 
                 cards_in_deck.extend(cards)
 
-            all_combinations = Counter(combinations(cards_in_deck, 2))
-            for (card1, card2), count in all_combinations.items():
-                coo[card_to_id[card1], card_to_id[card2]] += count
+            fill_matrix_with_all_combinations(coo, cards_in_deck, card_to_id)
+
+
+def fill_matrix_with_all_combinations(coo_matrix, deck_passcodes, passcode_to_id):
+    all_combinations = Counter(permutations(deck_passcodes, 2))
+    for (card1, card2), count in all_combinations.items():
+        coo_matrix[passcode_to_id[card1], passcode_to_id[card2]] += count
