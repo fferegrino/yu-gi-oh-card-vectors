@@ -55,7 +55,7 @@ jobs:
         env:
             METAFLOW_CONFIG: ${{ needs.SetupInfra.outputs.metaflow_config }}
         run: |
-          echo ${$METAFLOW_CONFIG:0:10}
+          echo ${METAFLOW_CONFIG:0:10}
           echo $METAFLOW_CONFIG > metaflow_profile.json
           config=$(cat metaflow_profile.json)
           auth_key=${{ secrets.METAFLOW_SERVICE_AUTH_KEY }}
