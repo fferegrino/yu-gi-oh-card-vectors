@@ -51,7 +51,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         self.card_count = len(self.id_to_card)
         self.next(self.build_cooccurrence_matrix)
 
-    # @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
+    @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
     @step
     def build_cooccurrence_matrix(self):
         """
@@ -74,7 +74,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         self.next(self.build_embeddings)
 
-    # @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
+    @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
     @step
     def build_embeddings(self):
         """
@@ -91,7 +91,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         self.next(self.build_index)
 
-    # @conda(libraries={"python-annoy": "1.17.1", "numpy": "1.24.2"})
+    @conda(libraries={"python-annoy": "1.17.1", "numpy": "1.24.2"})
     @step
     def build_index(self):
         """
