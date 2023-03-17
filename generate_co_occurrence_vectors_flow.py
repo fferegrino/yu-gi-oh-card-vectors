@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, step, Parameter, profile
+from metaflow import FlowSpec, step, Parameter, profile, conda, resources, S3
 
 
 class GenerateCoOccurrenceVectorsFlow(FlowSpec):
@@ -51,6 +51,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         self.card_count = len(self.id_to_card)
         self.next(self.build_cooccurrence_matrix)
 
+    @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
     @step
     def build_cooccurrence_matrix(self):
         """
@@ -75,6 +76,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         self.next(self.build_embeddings)
 
+    @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
     @step
     def build_embeddings(self):
         """
@@ -91,6 +93,8 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         self.next(self.build_index)
 
+    @conda(libraries={"python-annoy": "1.17.1", "numpy": "1.24.2"})
+    @resources(memory=16000)
     @step
     def build_index(self):
         """
@@ -110,14 +114,22 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
             print(f"Writing index to {tmp.name} and not deleting")
 
-            if self.preserve_annoy_index:
-                self.model_ann = tmp.read()
+            with S3(run=self) as s3:
+                upload_result = s3.put_files([("index.ann", tmp.name)])
+                self.index_s3_url = upload_result[0][1]
+                print("Object saved at", self.index_s3_url)
 
         self.next(self.end)
 
     @step
     def end(self):
-        pass
+        import boto3
+
+        s3 = boto3.resource("s3")
+        bucket, key = self.index_s3_url.replace("s3://", "").split("/", 1)
+        copy_source = {"Bucket": bucket, "Key": key}
+        bucket = s3.Bucket("feregrino-metaflow-experiments")
+        bucket.copy(copy_source, "yu-gi-oh/index.ann")
 
 
 if __name__ == "__main__":
