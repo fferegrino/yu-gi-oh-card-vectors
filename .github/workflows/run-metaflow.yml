@@ -39,7 +39,7 @@ jobs:
       - name: Upload metaflow config
         id: upload_metaflow_config
         run:
-          echo "metaflow_config=${cat metaflow_profile.json}" >> "$GITHUB_OUTPUT"
+          echo "metaflow_config=$(cat metaflow_profile.json)" >> "$GITHUB_OUTPUT"
 
 
   TriggerIndexBuild:
