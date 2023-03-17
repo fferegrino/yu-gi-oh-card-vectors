@@ -22,7 +22,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         """
         Builds the reference dictionaries for the cards, these will map the card ID to the index in the embedding matrix
         """
-        from git import clone_repo
+        from yugioh_card_vectors.git import clone_repo
         import csv
 
         with clone_repo(self.cards_repo) as (repo_path, commit_hash):
@@ -51,17 +51,17 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
         self.card_count = len(self.id_to_card)
         self.next(self.build_cooccurrence_matrix)
 
-    @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
+    # @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
     @step
     def build_cooccurrence_matrix(self):
         """
         Build a sparse co-occurrence matrix for the cards in the decks
         """
-        from git import clone_repo
+        from yugioh_card_vectors.git import clone_repo
         from scipy.sparse import coo_matrix
         import numpy as np
         import glob
-        from cooccurrence import fill_matrix_from_file
+        from yugioh_card_vectors.cooccurrence import fill_matrix_from_file
 
         coo = np.zeros((self.card_count, self.card_count), dtype=np.int32)
 
@@ -74,7 +74,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         self.next(self.build_embeddings)
 
-    @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
+    # @conda(libraries={"scipy": "1.10.1", "numpy": "1.24.2"})
     @step
     def build_embeddings(self):
         """
@@ -91,7 +91,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         self.next(self.build_index)
 
-    @conda(libraries={"python-annoy": "1.17.1", "numpy": "1.24.2"})
+    # @conda(libraries={"python-annoy": "1.17.1", "numpy": "1.24.2"})
     @step
     def build_index(self):
         """
