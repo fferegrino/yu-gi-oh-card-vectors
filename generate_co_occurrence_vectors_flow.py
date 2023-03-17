@@ -11,20 +11,12 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
     @step
     def start(self):
         """
-        Setups the flow with the appropriate repository URLs
-        """
-        self.cards_repo = "https://github.com/fferegrino/yu-gi-oh.git"
-        self.decks_repo = "https://github.com/fferegrino/yu-gi-oh-decks.git"
-        self.next(self.build_reference_dicts)
-
-    @step
-    def build_reference_dicts(self):
-        """
         Builds the reference dictionaries for the cards, these will map the card ID to the index in the embedding matrix
         """
         from yugioh_card_vectors.git import clone_repo
         import csv
 
+        self.cards_repo = "https://github.com/fferegrino/yu-gi-oh.git"
         with clone_repo(self.cards_repo) as (repo_path, commit_hash):
             self.cards_commit_hash = commit_hash
             self.card_to_id = {}
@@ -65,6 +57,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         coo = np.zeros((self.card_count, self.card_count), dtype=np.int32)
 
+        self.decks_repo = "https://github.com/fferegrino/yu-gi-oh-decks.git"
         with clone_repo(self.decks_repo) as (repo_path, commit_hash):
             self.decks_commit_hash = commit_hash
             for csv_file in glob.glob(repo_path + "/data/*.csv"):
