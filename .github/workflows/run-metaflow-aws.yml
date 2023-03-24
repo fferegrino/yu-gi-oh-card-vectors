@@ -1,13 +1,6 @@
 name: Trigger index build
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'terraform/**'
-      - 'yugioh_card_vectors/**'
-      - 'generate_co_occurrence_vectors_flow.py'
 
 jobs:
   SetupInfra:

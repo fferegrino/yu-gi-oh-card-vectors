@@ -1,0 +1,44 @@
+name: Trigger index build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - 'yugioh_card_vectors/**'
+      - 'generate_co_occurrence_vectors_flow.py'
+
+jobs:
+  SetupInfra:
+    runs-on: ubuntu-latest
+    outputs:
+      metaflow_config: ${{ steps.upload_metaflow_config.outputs.metaflow_config }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: 3.8
+
+      - name: Install metaflow
+        run: |
+          pip install --upgrade pip==23.0.1
+          pip install --upgrade metaflow==2.8.0
+
+      - name: Trigger Metaflow execution
+        env:
+          USER: antonio
+          CONDA_CHANNELS: conda-forge
+        run: |
+          python generate_co_occurrence_vectors_flow.py --environment=conda run --upload_to_s3 true

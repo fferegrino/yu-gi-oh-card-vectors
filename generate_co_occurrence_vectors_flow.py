@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, step, Parameter, profile, conda, resources, S3
+from metaflow import FlowSpec, step, Parameter, profile, conda, S3
 
 
 class GenerateCoOccurrenceVectorsFlow(FlowSpec):
@@ -106,11 +106,11 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
 
         self.next(self.end)
 
+    @conda(libraries={"boto3": "1.24.28"})
     @step
     def end(self):
         from tempfile import NamedTemporaryFile
         import json
-        import boto3
 
         if self.upload_to_s3:
             with NamedTemporaryFile(delete=False) as index_file:
@@ -119,21 +119,13 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
             with NamedTemporaryFile(delete=False, mode="w") as id_to_card:
                 json.dump(self.id_to_card, id_to_card)
 
-            with S3(run=self) as s3:
+            with S3(s3root="s3://public-feregrino-bucket/yu-gi-oh-vectors/") as s3:
                 upload_results = s3.put_files([("index.ann", index_file.name), ("cards.json", id_to_card.name)])
 
-            s3 = boto3.resource("s3")
-            for (file, s3url), name in zip(upload_results, ["index.ann", "cards.json"]):
-                copy_file_s3(s3, name, s3url)
+            for key, value in upload_results.items():
+                print(f"Uploaded {key} to {value}")
         else:
             print("Not uploading to S3")
-
-
-def copy_file_s3(s3, name, s3url):
-    bucket, key = s3url.replace("s3://", "").split("/", 1)
-    copy_source = {"Bucket": bucket, "Key": key}
-    bucket = s3.Bucket("feregrino-metaflow-experiments")
-    bucket.copy(copy_source, f"yu-gi-oh/{name}")
 
 
 if __name__ == "__main__":

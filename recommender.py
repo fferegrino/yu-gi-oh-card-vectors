@@ -13,14 +13,14 @@ st.set_page_config(layout="wide")
 def load_model():
     model_ann = AnnoyIndex(30, "angular")
     s3 = boto3.client("s3")
-    bucket_name = "feregrino-metaflow-experiments"
+    bucket_name = "public-feregrino-bucket"
     # Download the model to a temporary file
     with NamedTemporaryFile() as tmp:
-        object_key = "yu-gi-oh/index.ann"
+        object_key = "yu-gi-oh-vectors/index.ann"
         s3.download_fileobj(bucket_name, object_key, tmp)
         model_ann.load(tmp.name)
 
-    object_key = "yu-gi-oh/cards.json"
+    object_key = "yu-gi-oh-vectors/cards.json"
     with open("cards.json", "wb") as f:
         s3.download_fileobj(bucket_name, object_key, f)
     with open("cards.json") as f:
