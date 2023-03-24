@@ -122,7 +122,7 @@ class GenerateCoOccurrenceVectorsFlow(FlowSpec):
             with S3(s3root="s3://public-feregrino-bucket/yu-gi-oh-vectors/") as s3:
                 upload_results = s3.put_files([("index.ann", index_file.name), ("cards.json", id_to_card.name)])
 
-            for key, value in upload_results.items():
+            for key, value in upload_results:
                 print(f"Uploaded {key} to {value}")
         else:
             print("Not uploading to S3")
